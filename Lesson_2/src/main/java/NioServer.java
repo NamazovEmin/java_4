@@ -1,5 +1,6 @@
-import javax.sound.midi.Soundbank;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -18,7 +19,7 @@ public class NioServer {
     private Selector selector;
     private StringBuilder fileDir = new StringBuilder(System.getProperty("user.home"));
     private final String CURRENT_DIRECTORY_FILES = "is";
-    private final String CURRENT_FILES_IN_THIS_DIRECTORY = "cat";
+    private final String CURRENT_FILES_IN_THIS_DIRECTORY_READ = "cat";
     private final String CHANGE_DIRECTORY_IN = "cd";
     private Path pathDir = Path.of(System.getProperty("user.home"));
     public NioServer() throws IOException {
@@ -73,8 +74,8 @@ public class NioServer {
         if (stringBuilder.toString().startsWith(CURRENT_DIRECTORY_FILES)) {
           wrapCurrentDirectoryFiles(channel);
         }
-        if (stringBuilder.toString().startsWith(CURRENT_FILES_IN_THIS_DIRECTORY)) {
-            searchFileInCurrentDirectory(stringBuilder,channel);
+        if (stringBuilder.toString().startsWith(CURRENT_FILES_IN_THIS_DIRECTORY_READ)) {
+            searchFileInCurrentDirectoryAndRead(stringBuilder,channel);
         }
         if (stringBuilder.toString().startsWith(CHANGE_DIRECTORY_IN)) {
             pathDir = changeDirectoryIN(stringBuilder,channel);
@@ -116,19 +117,28 @@ public class NioServer {
         }
     }
 
-    private void searchFileInCurrentDirectory(StringBuilder stringBuilder, SocketChannel channel) throws IOException {
+    private void searchFileInCurrentDirectoryAndRead(StringBuilder stringBuilder, SocketChannel channel) throws IOException {
         String[] text = stringBuilder.toString().split(" ");
         if (text.length >= 2){
             String fileName = text[1].substring(0, text[1].length()-2);
             List<String> list= getFiles(new StringBuilder(String.valueOf(pathDir)));
+            Path newPath = pathDir.resolve(fileName);
             for (String file: list) {
-                if (file.equals(fileName)) {
+                if (file.equals(fileName) && !Files.isDirectory(newPath)) {
+                    System.out.println(newPath);
+                    BufferedReader bufferedReader = new BufferedReader(new FileReader(String.valueOf(newPath)));
+                    String line;
+                    do {
+                        line = bufferedReader.readLine();
+                        channel.write(ByteBuffer.wrap(line.getBytes(StandardCharsets.UTF_8)));
+                        channel.write(ByteBuffer.wrap(System.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)));
+                    }while (bufferedReader.readLine() != null);
                     channel.write(ByteBuffer.wrap("true".getBytes(StandardCharsets.UTF_8)));
                     channel.write(ByteBuffer.wrap(System.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)));
                     return;
                 }
             }
-            channel.write(ByteBuffer.wrap("false".getBytes(StandardCharsets.UTF_8)));
+            channel.write(ByteBuffer.wrap("there is no such file or it is a directory".getBytes(StandardCharsets.UTF_8)));
             channel.write(ByteBuffer.wrap(System.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)));
         }
     }
